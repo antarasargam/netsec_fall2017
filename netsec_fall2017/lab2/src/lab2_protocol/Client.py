@@ -98,7 +98,7 @@ class PEEPClient(StackingProtocol):
                 ack = PEEP()
                 ack.Type = 2
                 ack.SequenceNumber = packet.Acknowledgement
-                ack.Acknowledgement = packet.SequenceNumber + sys.getsizeof(packet) + 1
+                ack.Acknowledgement = packet.SequenceNumber + 1
                 self.state += 1
                 ack.Checksum = self.calculateChecksum(ack)
                 clientpacketbytes = ack.__serialize__()
