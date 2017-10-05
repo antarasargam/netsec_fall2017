@@ -85,7 +85,7 @@ class PEEPServerProtocol(StackingProtocol):
                     synack = PEEP()
                     synack.Type = 1
                     self.length = sys.getsizeof(pkt)
-                    synack.Acknowledgement = pkt.SequenceNumber +  sys.getsizeof(pkt) + 1
+                    synack.Acknowledgement = pkt.SequenceNumber + 1
                     synack.SequenceNumber = random.randint(5000, 9999)
                     self.serverseq = synack.SequenceNumber
                     synack.Checksum = self.calculateChecksum(synack)
