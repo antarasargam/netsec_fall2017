@@ -32,9 +32,9 @@ class PeepClientTransport(StackingTransport):
 
 
     def write(self, data):
-        bytes = data.__serialize__()
+        #bytes = data.__serialize__()
         #print(self.lowerTransport())
-        self.protocol.write(bytes)
+        self.protocol.write(data)
 
     def close(self):
         self.lowerTransport().connection_lost()
