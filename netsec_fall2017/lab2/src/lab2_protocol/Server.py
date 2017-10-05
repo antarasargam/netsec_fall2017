@@ -29,8 +29,8 @@ class PEEP(PacketType):
         super().__init__(self.transport)
 
     def write(self, data):
-        bytes = data.__serialize__()
-        self.protocol.write(bytes)
+        #bytes = data.__serialize__()
+        self.protocol.write(data)
 
 global window_size
 window_size = 0
