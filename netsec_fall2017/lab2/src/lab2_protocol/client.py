@@ -252,7 +252,7 @@ class PEEPClient(StackingProtocol):
         print ("ACK No:" + str(ack.Acknowledgement))
         # For debugging
         ack.Checksum = calcChecksum.calculateChecksum(ack)
-        #print(ack.Checksum)
+        print(ack.Checksum)
         bytes = ack.__serialize__()
         self.transport.write(bytes)
 
@@ -287,7 +287,7 @@ class PEEPClient(StackingProtocol):
             self.backlog_window.append(chunk)
             self.i += 1024
             self.l += 1
-            if len(self.sending_window) <= 10:
+            if self.sending_window_count <= 100:
                 if self.backlog_window != []:
                     print("About to pop backlog in client")
                     data_from_BL = self.backlog_window.pop(0)
@@ -466,16 +466,16 @@ class PEEPClient(StackingProtocol):
 
                 self.sending_window_count = self.sending_window_count - 1
                 print("client: sending window count is", self.sending_window_count)
-                if len(self.sending_window) <= 10:
+                if self.sending_window_count <= 100:
                     print("About to pop backlog")
                     if self.backlog_window != []:
                         data_from_BL = self.backlog_window.pop(0)
                         self.encapsulating_packet(data_from_BL)
                         ## ^ bug fix..
-                    if len(self.sending_window) == 0 and self.rip_received == 1 and self.backlog_window == []:
+                    if self.sending_window_count == 0 and self.rip_received == 1 and self.backlog_window == []:
                         self.sending_ripack(self.RIP_PACKET)
 
-                    if len(self.sending_window) == 0 and self.ripack_received==1 and self.backlog_window == []:
+                    if self.sending_window_count == 0 and self.ripack_received==1 and self.backlog_window == []:
                         self.close_timers()
                         self._state += 1
                         self.connection_lost(self)
@@ -534,7 +534,7 @@ class PEEPClient(StackingProtocol):
         self.loop.stop()
 
     async def connection_timeout(self):
-        while self.sending_window_count > 0:
+        while self.sending_window_count >= 0:
             await asyncio.sleep(0.2)
             if len(self.keylist1) < 3:
                 await asyncio.sleep(0.2)
