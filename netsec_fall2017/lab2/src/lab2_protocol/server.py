@@ -207,6 +207,7 @@ class PEEPServerProtocol(StackingProtocol):
             elif pkt.Type == 2:
                 #### NEED A STATE INFO SO THAT Handshake packets are not received here.
                 if checkvalue:
+                    #print("aksjfaskfdbaskfdbakdfbaksdfbaskfbaksdfbashdfbashdhfbalshdfb")
                     '''self.return_value = self.check_if_ack_received_before(pkt)
                     if self.return_value == 1:
                         self.prev_ack_number = 0
@@ -420,19 +421,19 @@ class PEEPServerProtocol(StackingProtocol):
                 self.keylist1.pop(0)
                 self.sending_window_count = self.sending_window_count - 1
                 print("Sending window count is", self.sending_window_count)
-                if len(self.sending_window) <= 10:
+                if self.sending_window_count <= 100:
                     print("About to pop backlog")
                     if self.backlog_window != []:
                         data_from_BL = self.backlog_window.pop(0)
                         self.encapsulating_packet(data_from_BL)
                         # bug fix...
-                    if len(self.sending_window) == 0 and self.rip_received == 1 and self.backlog_window == []:
-                        self.sending_ripack(self.RIP_PACKET)
+                    #if self.sending_window_count == 0 and self.rip_received == 1 and self.backlog_window == []:
+                        #self.sending_ripack(self.RIP_PACKET)
 
-                    if len(self.sending_window) == 0 and self.ripack_received == 1 and self.backlog_window == []:
-                        self.close_timers()
-                        self.serverstate += 1
-                        self.connection_lost(self)
+                    #if self.sending_window_count == 0 and self.ripack_received == 1 and self.backlog_window == []:
+                        #self.close_timers()
+                        #self.serverstate += 1
+                        #self.connection_lost(self)
                     #else:
                 #print (" Popped all packets ")
         #self.keylist1 = []
@@ -449,7 +450,7 @@ class PEEPServerProtocol(StackingProtocol):
             self.backlog_window.append(chunk)
             self.i += 1024
             self.l += 1
-            if len(self.sending_window) <= 10:
+            if self.sending_window_count <= 100:
                 if self.backlog_window != []:
                     print("About to pop backlog in server")
                     data_from_BL = self.backlog_window.pop(0)
@@ -551,7 +552,7 @@ class PEEPServerProtocol(StackingProtocol):
         self.transport = None
 
     async def connection_timeout(self):
-        while self.sending_window_count > 0:
+        while self.sending_window_count >= 0:
             await asyncio.sleep(0.2)
             if len(self.keylist1) < 3:
                 await asyncio.sleep(0.2)
@@ -566,6 +567,7 @@ class Timerx():
         self._timeout = timeout
         self._callback = callback
         self.packet = packet
+        self.flag = 0
         self._task = asyncio.ensure_future(self._job())
 
     async def _job(self):
