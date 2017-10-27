@@ -3,7 +3,7 @@
 import asyncio
 import playground
 import random, logging
-from .Servera import PEEPpacket
+from .server import PEEPpacket
 from playground.network.packet import PacketType
 from playground.network.packet.fieldtypes import UINT32, STRING, UINT16, UINT8, BUFFER
 from playground.network.packet.fieldtypes.attributes import Optional
