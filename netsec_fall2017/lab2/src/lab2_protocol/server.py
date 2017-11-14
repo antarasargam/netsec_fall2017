@@ -299,6 +299,7 @@ class PEEPServerProtocol(StackingProtocol):
     def sending_ripack(self, RIP_PKT):
         self.close_timers()
         # RIPack
+        print ("Sending RIP-ACK")
         ripack = PEEPpacket()
         self.RIP_PKT = RIP_PKT
         self.exc = 0
@@ -310,6 +311,7 @@ class PEEPServerProtocol(StackingProtocol):
         ripack.Checksum = calcChecksum.calculateChecksum(ripack)
         ripz = ripack.__serialize__()
         self.transport.write(ripz)
+        #asyncio.sleep(10)
         self.connection_lost(self)
 
 
