@@ -357,6 +357,7 @@ class PEEPClient(StackingProtocol):
         return self.packet
 
     def pop_sending_window(self, AckNum):
+        print ("Client sending window count",self.sending_window_count)
         self.AckNum = AckNum
         for key in self.keylist1:
             #print ("Key is: ", key)
@@ -384,7 +385,8 @@ class PEEPClient(StackingProtocol):
                 Data = b'rip'
                 self.write(Data)
 
-            if self.sending_window_count == 1 and self.ripack_received==1 and self.backlog_window == []:
+            if self.sending_window_count == 0 and self.ripack_received==1 and self.backlog_window == []:
+                print ("Recieved RIP ACK.. Closing client connection")
                 self.close_timers()
                 self._state += 1
                 self.connection_lost(self)
