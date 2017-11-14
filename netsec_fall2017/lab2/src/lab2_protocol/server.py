@@ -102,14 +102,15 @@ class PEEPServerProtocol(StackingProtocol):
     async def data_timeout(self):
         print("Server: Inside Data Timer")
         packets = list(self.t.values())
-        while self.global_received_ack < self.global_number_seq:
+        while self.global_received_ack <= self.global_number_seq:
             await asyncio.sleep(0.1)
             for each_packet in packets:
                 await asyncio.sleep(0.1)
-                if self.global_received_ack < self.global_number_seq:
-                    if each_packet.packet.SequenceNumber == self.global_received_ack and each_packet.flag < 6:
+                if self.global_received_ack <= self.global_number_seq:
+                    if each_packet.packet.SequenceNumber == self.global_received_ack:
+                        #each_packet.packet.Acknowledgement = self.global_number_ack
                         self.transport.write(each_packet.packet.__serialize__())
-                        each_packet.flag += 1
+                        #each_packet.flag += 1
                         print("Server: Packet Retransmitted.",each_packet.packet.SequenceNumber)
 
     '''async def data_timeout(self):
@@ -156,8 +157,6 @@ class PEEPServerProtocol(StackingProtocol):
                     self.synackx = synack.__serialize__()
                     self.transport.write(self.synackx)
                     self.ta = Timerx(0.1, self.synackx_timeout, synack)
-
-
                 else:
                     print("Checksum error. Packet Data corrupt.")
                     self.transport.close()
@@ -171,11 +170,9 @@ class PEEPServerProtocol(StackingProtocol):
                     print("\n================== TCP Connection successful! Client OK to send the Data now.============= \n")
 
                     # calling higher connection made since we have received the ACK
-
                     peeptransport = PeepServerTransport(self, self.transport)
                     higherTransport = StackingTransport(peeptransport)
                     self.higherProtocol().connection_made(higherTransport)
-
                 else:
                     print("================== Corrupted ACK packet. Please check on client end.===============\n")
                     self.transport.close()
@@ -189,17 +186,8 @@ class PEEPServerProtocol(StackingProtocol):
                     print("The size of packet is:", self.global_packet_size)
                     print("Seq number of incoming packet", pkt.SequenceNumber)
                     print("Ack Number of incoming packet", pkt.Acknowledgement)
-                    #self.global_received_ack = pkt.Acknowledgement
                     self.receive_window(pkt)
-
-                    #print (self.global_pig)
-
-                    #if self.global_pig != 56 :
-                    #    self.sendack(self.update_ack(pkt.SequenceNumber,self.global_packet_size))
-
                     print("Calling data received of higher protocol from PEEP")
-                    #self.higherProtocol().data_received(pkt.Data)
-
                  else:
                      print("================== Corrupted Data packet. Please check on client end.===============\n")
                      self.transport.close()
@@ -207,18 +195,13 @@ class PEEPServerProtocol(StackingProtocol):
             elif pkt.Type == 2:
                 #### NEED A STATE INFO SO THAT Handshake packets are not received here.
                 if checkvalue:
-                    #print("aksjfaskfdbaskfdbakdfbaksdfbaskfbaksdfbashdfbashdhfbalshdfb")
                     '''self.return_value = self.check_if_ack_received_before(pkt)
                     if self.return_value == 1:
                         self.prev_ack_number = 0
                     else:'''
                     self.prev_ack_number = pkt.Acknowledgement
-                    self.pop_sending_window(pkt.Acknowledgement)
                     print("ACK Received from the client. Removing data from buffer.", pkt.Acknowledgement)
-                    #print("prev_ack_number11111111", self.prev_ack_number)
-                    #print("2222222222", pkt.Acknowledgement)
-
-
+                    self.pop_sending_window(pkt.Acknowledgement)
                     self.global_received_ack = pkt.Acknowledgement
 
 
@@ -226,7 +209,8 @@ class PEEPServerProtocol(StackingProtocol):
                 if checkvalue:
                     self.rip_received = 1
                     self.RIP_PACKET = pkt
-                    print("RIP Received from Client with Seq. No.:", pkt.SequenceNumber)
+                    print("RIP Received from Client with Seq. No.:", pkt.SequenceNumber, " and Ack. No.:", pkt.Acknowledgement)
+                    self.pop_sending_window(pkt.Acknowledgement)
                 else:
                     print("Corrupt RIP packet received. Please check on server end.")
 
@@ -254,33 +238,6 @@ class PEEPServerProtocol(StackingProtocol):
         print(bytes)
         self.transport.write(bytes)
 
-    '''def receive_window(self, pkt):
-        self.number_of_packs += 1
-        # Assuming 10 as the size for this packet
-        if pkt.SequenceNumber == self.global_number_ack:
-            self.global_number_ack = self.update_ack(pkt.SequenceNumber, self.global_packet_size)  # It's actually updating the expected Seq Number
-            print("Calling data received of higher protocol from PEEP ")
-            self.higherProtocol().data_received(pkt.Data)
-
-
-        elif self.number_of_packs <= 5:
-            self.recv_window[pkt.SequenceNumber] = pkt.Data
-            sorted(self.recv_window.items())
-
-            for k, v in self.recv_window.items():
-                if k == self.global_number_ack:
-                    self.higherProtocol().data_received(v)
-                    self.global_number_ack = self.update_ack(pkt.SequenceNumber)
-                    self.number_of_packs -= 1
-
-        else:
-            print("Receive window is full! Please try after some time")
-        #sorted(self.recv_window.items())
-        #print (self.recv_window[])
-        #for k, v in self.recv_window.items():
-            #print("printing contents of the buffer")
-            #print(k, v)'''
-
     def receive_window(self, pkt):
         self.number_of_packs += 1
         self.packet = pkt
@@ -294,22 +251,9 @@ class PEEPServerProtocol(StackingProtocol):
             # and self.packet.SequenceNumber <= self.global_number_ack + (1024*1000):
             self.recv_window[self.packet.SequenceNumber] = self.packet.Data
             self.sendack(self.global_number_ack)
-
-
-            '''
-            for k, v in self.recv_window.items():
-                if k == self.global_number_ack:
-                    self.higherProtocol().data_received(v)
-                    self.global_number_ack = self.update_ack(self.packet.SequenceNumber, self.global_packet_size)
-                    self.number_of_packs -= 1
-            '''
+            #self.check_receive_window()
         else:
             print ("Receive window is full or the packet has already been received!")
-        #sorted(self.recv_window.items())
-        #print (self.recv_window[])
-        #for k, v in self.recv_window.items():
-            #print ("printing contents of the buffer")
-             #print (k, v)'''
 
     def check_receive_window(self):
         sorted_list = []
@@ -322,25 +266,6 @@ class PEEPServerProtocol(StackingProtocol):
             else:
                 return
 
-    '''def check_if_ack_received_before(self, packet):
-        keylist = list(self.sending_window)
-        self.keylist1 = sorted(keylist)
-        if self.prev_ack_number == packet.Acknowledgement:
-            print("REceived two acks of the same value")
-            print ("333333333333",self.keylist1)
-            for key in self.keylist1:
-
-                if key == packet.Acknowledgement:
-                    print("found a key that equals the acknow received")
-                    packet_to_be_retrans = self.sending_window[self.keylist1[0]]
-                    print("So far so goood!")
-                    packet_to_be_retrans.Acknowledgment = self.global_number_ack
-                    bytes_retrans = packet_to_be_retrans.__serialize__()
-                    self.transport.write(bytes_retrans)
-                    print("ready to return")
-                    return 1'''
-
-
     def calculate_length(self, data):
         self.prev_packet_size = len(data)
 
@@ -349,9 +274,6 @@ class PEEPServerProtocol(StackingProtocol):
             self.count_of_function_call = 1
             self.calculate_length(data)
             return self.global_number_seq
-        #elif data == 'rip':
-            #self.global_number_seq = self.prev_sequence_number + self.prev_packet_size
-            #return self.global_number_seq
         else:
             self.global_number_seq = self.prev_sequence_number + self.prev_packet_size
             # print("new sequence number", self.global_number_seq)
@@ -369,55 +291,46 @@ class PEEPServerProtocol(StackingProtocol):
         #self.key = self.prev_sequence_number + self.prev_packet_size
         self.key = self.global_number_seq
         self.sending_window[self.key] = self.packet
-        #for k,v in self.sending_window.items():
-            #print ("Key is: ",k, "Packet is: ", v)
-
-        #self.sending_window = sorted(self.sending_window.items())
         keylist = list(self.sending_window)
         self.keylist1 = sorted(keylist)
-        print("s###########################################", self.keylist1)
         return self.packet
 
 
     def sending_ripack(self, RIP_PKT):
         self.close_timers()
-        print("RIP Received from Client with Seq. No.: ", RIP_PKT.SequenceNumber, ".  Sending RIP-ACK.")
         # RIPack
+        print ("Sending RIP-ACK")
         ripack = PEEPpacket()
         self.RIP_PKT = RIP_PKT
         self.exc = 0
         self.serverstate += 1
         ripack.Type = 4
-        ripack.Acknowledgement = self.RIP_PKT.SequenceNumber + len(self.RIP_PKT.Data)
+        ripack.Acknowledgement = self.RIP_PKT.SequenceNumber + 50
         ripack.SequenceNumber = 0
         calcChecksum = PEEPServerProtocol(self.loop)
         ripack.Checksum = calcChecksum.calculateChecksum(ripack)
         ripz = ripack.__serialize__()
         self.transport.write(ripz)
-        print("Closing connection now. Sent RIP ACK!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        #asyncio.sleep(10)
         self.connection_lost(self)
 
 
     def pop_sending_window(self, AckNum):
-
         self.AckNum = AckNum
-        print (" Ack Number is: ", self.AckNum)
-        #self.sending_window = OrderedDict(sorted(self.sending_window.items()))
         for key in self.keylist1:
             print ("Key is: ", key)
-            print ("Server: keylist", self.keylist1)
+            print ("#Server Window#:", self.keylist1)
             if (self.AckNum > key):
                 #Finishing off timers for the packets with ACKs received
-
                 seqs = list(self.t.keys())
+                print("Seqs is",seqs)
                 for chabi in seqs:
                     if self.AckNum > chabi:
+                        print("About to pop chabi and cancel timers")
                         (self.t[chabi]).cancel()
                         self.t.pop(chabi)
-                print("server: dicto", self.sending_window.keys())
                 print("Key value to pop is", key)
                 self.sending_window.pop(key)
-                print ("server: dicto post popped",self.sending_window.keys())
                 self.keylist1.pop(0)
                 self.sending_window_count = self.sending_window_count - 1
                 print("Sending window count is", self.sending_window_count)
@@ -426,17 +339,14 @@ class PEEPServerProtocol(StackingProtocol):
                     if self.backlog_window != []:
                         data_from_BL = self.backlog_window.pop(0)
                         self.encapsulating_packet(data_from_BL)
-                        # bug fix...
-                    #if self.sending_window_count == 0 and self.rip_received == 1 and self.backlog_window == []:
-                        #self.sending_ripack(self.RIP_PACKET)
 
-                    #if self.sending_window_count == 0 and self.ripack_received == 1 and self.backlog_window == []:
-                        #self.close_timers()
-                        #self.serverstate += 1
-                        #self.connection_lost(self)
-                    #else:
-                #print (" Popped all packets ")
-        #self.keylist1 = []
+            else:
+                return
+        if self.sending_window_count == 0 and self.rip_received == 1 and self.backlog_window == []:
+                         #and self.global_number_ack == self.RIP_PKT.SequenceNumber + 50:
+                         #self.sendack(self.global_number_ack)
+                         self.sending_ripack(self.RIP_PACKET)
+
         return
 
     def write(self, data):
@@ -490,7 +400,6 @@ class PEEPServerProtocol(StackingProtocol):
             #print("data is", chunk)
             print("size of data", len(chunk))
             self.Sencap.Checksum = calcChecksum.calculateChecksum(self.Sencap)
-
             self.Sencap = self.update_sending_window(self.Sencap)
             self.bytes = self.Sencap.__serialize__()
             print(" Writing down to wire after updating window ")
@@ -499,27 +408,6 @@ class PEEPServerProtocol(StackingProtocol):
             self.chabi = self.global_number_seq
             self.t[self.chabi] = self.tx
 
-    '''def empty_sending_window(self):
-        while len(self.backlog_window) < 1:
-            print("About to pop backlog in client")
-            data_from_BL = self.backlog_window.pop(0)
-            self.encapsulating_packet(data_from_BL)
-        else:
-            while len(self.sending_window) < 1:
-                print("Backlog Emptied now. Emptying Sending Window.")
-                self.close_true = 1
-                for k,v in self.sending_window.items():
-                    self.bytes = v.__serialize__()
-                    self.i += 1024
-                    self.l += 1
-                    self.transport.write(self.bytes)
-                    # Creating timer for each data packet
-                    self.timer = PEEPServerProtocol(loop)
-                    self.tx = Timerx(0.1, self.data_timeout, v)
-                    self.chabi = self.global_number_seq
-                    self.t[self.chabi] = self.tx
-                    print("Sent packet with Seq. No.", k)
-                    self.pop_sending_window(k)'''
 
     def close_timers(self):
         for k,v in self.t.items():
@@ -527,20 +415,9 @@ class PEEPServerProtocol(StackingProtocol):
             v.cancel()
 
     def close(self):
-        # RIP Packet
-        #data = 'rip'
-        #self.empty_sending_window()
-        #self.close_timers()
-        '''self.rip = PEEPpacket()
-        self.rip.Type = 3
-        self.rip.Acknowledgement = 0'''
+
         Data=b'rip'
-        '''self.rip.SequenceNumber = self.update_sequence(self.rip.Data)
-        calcChecksum = PEEPServerProtocol(self.loop)
-        self.rip.Checksum = calcChecksum.calculateChecksum(self.rip)
-        print ("Sending RIP packet with Seq. No.:",self.rip.SequenceNumber," from client")
-        #self.backlog_window.append(rip)'''
-        self.write(Data)
+        #self.write(Data)
         #ripz = rip.__serialize__()
         #self.transport.write(ripz)
 
@@ -557,8 +434,6 @@ class PEEPServerProtocol(StackingProtocol):
             if len(self.keylist1) < 3:
                 await asyncio.sleep(0.2)
                 self.connection_lost(self)
-
-
 # Timerx Function code block starts here
 class Timerx():
 
