@@ -81,7 +81,7 @@ PEEP P-RFC(Playground-RFC). -->
 
        <phone>+1 609 508 3103</phone>
 
-       <email>pvenkat7@jhu.edu, swani1@jhu.edu, asargam1@jhu.edu, vbollap1@jhu.edu</email>
+       <email>pvenkat7@jhu.edu</email>
 
        <!-- uri and facsimile elements may also be added -->
      </address>
@@ -263,8 +263,8 @@ further from this point.</t>
 
 <section title="Session Termination:">
 <t>A graceful shutdown of the session should be maintained at the PEEP layer. To achieve this, when the PEEP layer receives the shutdown signal from the 
-higher protocol, it sends out a ‘RIP’ packet to the other side, signaling that PEEP connection needs to be terminated. The RIP packet is identified by the 
-type field being set to ‘3’.  When the other side receives the RIP packet, it should send out a RIP-ACK packet, type field set to ‘4’, to acknowledge for the 
+higher protocol, it sends out a RIP packet to the other side, signaling that PEEP connection needs to be terminated. The RIP packet is identified by the 
+type field being set to 3.  When the other side receives the RIP packet, it should send out a RIP-ACK packet, type field set to 4, to acknowledge for the 
 RIP packet. Once the RIP-ACK is sent out, the remaining packets in the buffer are cleared and an acknowledgement for them are awaited.</t>
 
 <t>When the sender receives an acknowledgement for all the packets sent out, it initiates a RIP message and waits for the RIP-ACK from the other side before 
@@ -287,15 +287,16 @@ ends out the RIP-ACK packet and clears the connection gracefully.</t>
 When users on both the sides simultaneously close a connection, the PEEP layers on both the sides, upon receiving the signal, send out the RIP packets. Both the 
 sides, upon receiving the RIP packet, clear their buffer and send out the RIP-ACK packets. Connection is closed on both the sides once final 
 RIP-ACK is received. </t>
+</list></t>
 
 <t>
 Client--------------------------RIP X----------------------->Server
-Client<---------------------RIP-ACK X+1--------------------- Server
+Client---------------------RIP-ACK X+1--------------------- Server
 
-Client<-------------------Clear the buffer------------------Server
+Client-------------------Clear the buffer------------------Server
 
-Client<-------------------------RIP Y-----------------------Server
-Client ---------------------RIP-ACK Y+1-------------------->Server
+Client------------------------RIP Y-----------------------Server
+Client ---------------------RIP-ACK Y+1--------------------Server
 (close)                                                   (close)
 </t>
 </section>
@@ -308,22 +309,22 @@ from the sender to the receiver. After the handshake, a PEEP connection is estab
 
 <t>Once the sender is ready to send the data out to the PEEP layer, the PEEP layer starts accepting data in chunks of 2048 bytes. If the data received 
 from the upper layer is larger than 2048 bytes, they are broken down into chunks of 2048 bytes (maximum size of payload a PEEP packet can encapsulate). The data 
-payload received by the PEEP protocol is encapsulated into the ‘Buffer’ field.</t>
+payload received by the PEEP protocol is encapsulated into the Buffer field.</t>
 
-<t>A PEEP data packet is marked by the ‘Type’ field set to ‘5’. This indicates the receiving side that the PEEP packet contains data for the upper layers. 
-On the client side, the “Sequence Number” header field for the first data packet sent is set equal to the sequence number of the ACK packet sent during the PEEP 
+<t>A PEEP data packet is marked by the Type field set to 5. This indicates the receiving side that the PEEP packet contains data for the upper layers. 
+On the client side, the Sequence Number header field for the first data packet sent is set equal to the sequence number of the ACK packet sent during the PEEP 
 handshake. For subsequent data packets, the sequence number is determined by adding the sequence number of the previous packet with the length of the 
 previous packet. This falls in line with the stream oriented approach PEEP follows to indicate the chunk of data sent from the stream of data. On the server side, 
 the first data packet sent has the sequence number of the SYN-ACK packet sent during the handshake. And similarly, for the subsequent packets, the sequence number 
 is determined by adding the sequence number and length of the previous packet sent.</t>
 
-<t>On the sending side, the “Checksum” header field of the PEEP packet must be calculated to maintain the integrity of the message. It is calculated by first 
+<t>On the sending side, the Checksum header field of the PEEP packet must be calculated to maintain the integrity of the message. It is calculated by first 
 setting the checksum field to 0 and then calculating the checksum using adler32 technique on the entire PEEP packet, after setting all the fields. The calculated 
 checksum value is put into the checksum field and sent out. On the receiving side, the value from the checksum field is derived, set to 0, calculated on the entire 
 received packet with the same technique and matched with the derived value to see if it matches. If it fails, the packet is dropped.</t>
 
-<t>Once the receiver receives a PEEP packet, it must send an acknowledgement to the sender about the packet. To do so, a packet with ‘Type’ field set to ‘2’ 
-is sent out. This packet uses the “Acknowledgement” header field and sets it with the right acknowledgement number to inform the sender of the correct packet 
+<t>Once the receiver receives a PEEP packet, it must send an acknowledgement to the sender about the packet. To do so, a packet with Type field set to 2 
+is sent out. This packet uses the Acknowledgement header field and sets it with the right acknowledgement number to inform the sender of the correct packet 
 received. The acknowledgement number is calculated by adding the sequence number with the length of the packet received for which the acknowledgement is being sent 
 out. Sending cumulative acknowledgements can also be an option for the receiving end.</t>
 
@@ -341,10 +342,10 @@ of the packet must be done to maintain reliability. To keep in line with this pr
 <t>PEEPPacket has multiple fields, Identifier and Version that helps pinpoint a PEEP Layer packet. A PEEP header consists of:- </t>
 
 <t>DEFINITION_IDENTIFIER</t>
-<t>This field consists of the “PEEPPacket”. This can be used to identify the type of the packet received is encapsulated with the PEEP header. </t>
+<t>This field consists of the PEEPPacket. This can be used to identify the type of the packet received is encapsulated with the PEEP header. </t>
 
 <t>DEFINITION_VERSION</t>
-<t>This field specifies the version of the PEEPPacket received. This must consist of “1.0”. This field is reserved for future use for further enhancements. </t>
+<t>This field specifies the version of the PEEPPacket received. This must consist of 1.0. This field is reserved for future use for further enhancements. </t>
 
 <t>FIELDS</t>
 <t>This consists of the following fields that helps describe the packet specifications:- </t>
@@ -426,15 +427,15 @@ Example diagram below shows that since the second packet from client to server w
 send an acknowledgement for the third packet till the second packet is received..</t> 
 
 <t>
-		Client---------------------Seq=x, Len=10------------------------>Server
+		Client---------------------Seq=x, Len=10------------------------Server
 
-		Client<------------------------Ack=x+10---------------------------Server
+		Client------------------------Ack=x+10---------------------------Server
 
-		Client---------------------Seq=x+10, Len=20---------------------> Server
+		Client---------------------Seq=x+10, Len=20--------------------- Server
 
-		Client---------------------Seq=x+30, Len=30------------------->Server
+		Client---------------------Seq=x+30, Len=30-------------------Server
 
-		Client<----------------------Ack=x+10----------------------------Server
+		Client----------------------Ack=x+10----------------------------Server
 </t>
 
 </section>
@@ -458,7 +459,7 @@ acknowledge (ACK) its own connection request. </t>
 <t>TRANSMISSION: This state represents a PEEP connection established state which implies both the parties are connected successfully via PEEP and the data can be delivered 
 to the application user. This state is necessary in order for the data transmission to work between PEEP entities. </t>
 
-<t>RIP-ACK WAIT: This state implies the PEEP entity is waiting for the remote end to send the connection termination request or the acknowledgement to it’s own connection 
+<t>RIP-ACK WAIT: This state implies the PEEP entity is waiting for the remote end to send the connection termination request or the acknowledgement to its own connection 
 termination request. </t>
 
 <t>CLOSE-WAIT: This state constitutes waiting for the local application to sent the connection termination request to the other end. </t>
@@ -486,9 +487,9 @@ connection termination requests. </t>
                    rcv SYN      |     |     SEND              
                   -----------   |     |    -------            
  +---------+      snd SYN,ACK  /       \   snd SYN          +---------+
- |         |<-----------------           ------------------>|         |
+ |         | -----------------           ------------------>|         |
  |  SYN-   |                    rcv SYN                     |  SYN-   |
- |   RCVD  |<-----------------------------------------------|   SENT  |
+ |   RCVD  | -----------------------------------------------|   SENT  |
  |         |                    snd ACK                     |         |
  |         |------------------           -------------------|         |
  +---------+   rcv ACK of SYN  \       /  rcv SYN,ACK       +---------+
@@ -501,7 +502,7 @@ connection termination requests. </t>
    |                   CLOSE    |     |    rcv RIP
    V                  -------   |     |    -------
  +---------+          snd RIP  /       \   snd ACK          +---------+
- |RIP-ACK  |<-----------------           ------------------>|  CLOSE  |
+ |RIP-ACK  | -----------------           ------------------>|  CLOSE  |
  | WAIT    |------------------                              |   WAIT  |
  +---------+          rcv RIP  \                            +---------+
    | rcv ACK of RIP   -------   |                            CLOSE  |
@@ -566,7 +567,7 @@ v04 2007-03-09 AH     Major changes: shortened discussion of PIs,
 v05 2007-03-10 EBD    Added preamble to C program example to tell about ABNF and alternative 
                      images. Removed meta-characters from comments (causes problems).
 
-v06 2010-04-01 TT     Changed ipr attribute values to latest ones. Changed date to
+v06 2010-04-01 TT     Changed iprf attribute values to latest ones. Changed date to
                      year only, to be consistent with the comments. Updated the 
                      IANA guidelines reference from the I-D to the finished RFC.  
                      
