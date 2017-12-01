@@ -1,4 +1,4 @@
-#Server IP Address 20174.1.666.45
+#Server IP Address 20174.1.666.46
 
 import hashlib
 from .CertFactory import getCertsForAddr, getPrivateKeyForAddr, getRootCert
@@ -15,6 +15,7 @@ from cryptography.hazmat.primitives.ciphers.modes import CTR
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives.ciphers import Cipher
+import hmac
 from cryptography.hazmat.backends import default_backend
 
 backend = default_backend()
@@ -35,6 +36,21 @@ class CIPHER_AES128_CTR(object):
         paddedData = self.decrypter.update(data) + self.encrypter.finalize()
         unpadder = PKCS7(self.block_size).unpadder()
         return unpadder.update(paddedData) + unpadder.finalize()
+
+class MAC_HMAC_SHA256(object):
+    MAC_SIZE = 20
+
+    def __init__(self, key):
+        self.__key = key
+
+    def mac(self, data):
+        mac = hmac.new(self.__key, digestmod="sha256")
+        mac.update(data)
+        return mac.digest()
+
+    def verifyMac(self, data, checkMac):
+        mac = self.mac(data)
+        return mac == checkMac
 
 class PLSStackingTransport(StackingTransport):
     def __init__(self, protocol, transport):
@@ -86,10 +102,13 @@ class PLSServer(StackingProtocol):
         encodedrootcert = getRootCert()
         rootcert = CipherUtil.getCertFromBytes(encodedrootcert)
         rootsubject = CipherUtil.getCertSubject(rootcert)
-        
+
         receivedIDCommonName = self.GetCommonName(certificate[0])
         intermediateCommonName = self.GetCommonName(certificate[1])
         rootCommonName = self.GetCommonName(rootcert)
+
+        print(" My address is:- ", self.address)
+        print(" Server PeerAddress is:- ", self.peerAddress)
 
         if self.peerAddress == receivedIDCommonName:    #This hardcoded IP address must the peerAddress
             print("Checked that the peerAddress and the received commmon name in the certificate is the same!")
@@ -112,7 +131,7 @@ class PLSServer(StackingProtocol):
                     hashes.SHA256())
 
                     print("Signature check stage 1 successful!")
-                    
+
                     splitlist = re.split('(.*)\.(.*)\.(.*)', FirstThreeOctets)[1:3]
                     FirstTwoOctets = '.'.join(splitlist)
 
@@ -174,11 +193,11 @@ class PLSServer(StackingProtocol):
                     serverhello.Nonce = int.from_bytes(os.urandom(8), byteorder='big') #12345678
                     self.ns = serverhello.Nonce
                     idcert = getCertsForAddr(self.address)
-                    pubkey = getCertsForAddr(self.splitaddr)
+                    intermediatecert = getCertsForAddr(self.splitaddr)
                     root = getRootCert()
                     serverhello.Certs = []
                     serverhello.Certs.append(idcert)
-                    serverhello.Certs.append(pubkey)
+                    serverhello.Certs.append(intermediatecert)
                     serverhello.Certs.append(root)
                     srvhello = serverhello.__serialize__()
                     print("Sent Server Hello!\n")
@@ -190,7 +209,7 @@ class PLSServer(StackingProtocol):
                 self.m.update(packet.__serialize__())
                 myprivatekey = getPrivateKeyForAddr(self.address)
                 serverpriv = CipherUtil.getPrivateKeyFromPemBytes(myprivatekey)
-                decrypted = serverpriv.decrypt(packet.PreKey, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),algorithm=hashes.SHA256(), label=None))
+                decrypted = serverpriv.decrypt(packet.PreKey, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA1()),algorithm=hashes.SHA1(), label=None))
                 #print("Decrypted Pre-Master Secret: ", decrypted)
                 self.pkc = int.from_bytes(decrypted, byteorder='big')
                 #====================================
@@ -200,7 +219,7 @@ class PLSServer(StackingProtocol):
                 self.pks = int.from_bytes(randomvalue, byteorder='big')
                 serverkey.NoncePlusOne = self.clientnonce + 1
                 pub_key = self.incoming_cert[0].public_key()
-                encrypted = pub_key.encrypt(randomvalue, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),algorithm=hashes.SHA256(), label=None))
+                encrypted = pub_key.encrypt(randomvalue, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA1()),algorithm=hashes.SHA1(), label=None))
                 #print("Encrypted String is: ", encrypted)
                 serverkey.PreKey = encrypted
                 skey = serverkey.__serialize__()
@@ -324,7 +343,7 @@ class PLSServer(StackingProtocol):
         return Plaintext
 
     def mac_engine(self, ciphertext):
-        makehmac = CipherUtil.MAC_HMAC_SHA1(self.mks)
+        makehmac = MAC_HMAC_SHA256(self.mks)
         mac = makehmac.mac(ciphertext)
 
         # Creating PLS Data Packet and Writing Down to PEEP
@@ -335,7 +354,7 @@ class PLSServer(StackingProtocol):
         self.transport.write(serializeddata)
 
     def mac_verification_engine(self, ReceivedCiphertext, ReceivedMac):
-        VerificationCheck = CipherUtil.MAC_HMAC_SHA1(self.mkc)
+        VerificationCheck = MAC_HMAC_SHA256(self.mkc)
         return VerificationCheck.verifyMac(ReceivedCiphertext, ReceivedMac)
 
     def write(self, data):
