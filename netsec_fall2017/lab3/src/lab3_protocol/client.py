@@ -15,6 +15,7 @@ from cryptography.hazmat.primitives.ciphers.modes import CTR
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.ciphers import Cipher
 from cryptography.x509.oid import NameOID
+import hmac
 from cryptography.hazmat.backends import default_backend
 backend = default_backend()
 
@@ -35,6 +36,22 @@ class CIPHER_AES128_CTR(object):
         paddedData = self.decrypter.update(data) + self.encrypter.finalize()
         unpadder = PKCS7(self.block_size).unpadder()
         return unpadder.update(paddedData) + unpadder.finalize()
+
+
+class MAC_HMAC_SHA256(object):
+    MAC_SIZE = 20
+
+    def __init__(self, key):
+        self.__key = key
+
+    def mac(self, data):
+        mac = hmac.new(self.__key, digestmod="sha256")
+        mac.update(data)
+        return mac.digest()
+
+    def verifyMac(self, data, checkMac):
+        mac = self.mac(data)
+        return mac == checkMac
 
 class PLSStackingTransport(StackingTransport):
 
@@ -77,6 +94,7 @@ class PLSClient(StackingProtocol):
         clienthello.Nonce = int.from_bytes(os.urandom(8), byteorder='big') #12345678
         #print("Client Nonce", clienthello.Nonce)
         self.nc = clienthello.Nonce
+
         idcert = getCertsForAddr(self.address)  #This hardcoded IP address must the peerAddress
         intermediatecert = getCertsForAddr(self.splitaddr)
         root = getRootCert()
@@ -107,7 +125,8 @@ class PLSClient(StackingProtocol):
         print("Type of RootCert: ", type(rootcert))
         rootsubject = CipherUtil.getCertSubject(rootcert)
 
-        print(" Server PeerAddress is:- ", self.address)
+        print(" My address is:- ", self.address)
+        print(" Server PeerAddress is:- ", self.peerAddress)
 
         receivedIDCommonName = self.GetCommonName(certificate[0])
         intermediateCommonName = self.GetCommonName(certificate[1])
@@ -203,7 +222,7 @@ class PLSClient(StackingProtocol):
                     clientkey.NoncePlusOne = packet.Nonce + 1
                     self.ns = packet.Nonce
                     pub_key = self.incoming_cert[0].public_key()
-                    encrypted1 = pub_key.encrypt(randomvalue, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),algorithm=hashes.SHA256(),label=None))
+                    encrypted1 = pub_key.encrypt(randomvalue, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA1()),algorithm=hashes.SHA1(),label=None))
                     #print ("Encrypted String is: ",encrypted1)
                     clientkey.PreKey = encrypted1
                     clkey = clientkey.__serialize__()
@@ -216,7 +235,7 @@ class PLSClient(StackingProtocol):
                 self.m.update(packet.__serialize__())
                 myprivatekey = getPrivateKeyForAddr(self.address) #This hardcoded IP address must the peerAddress
                 serverpriv = CipherUtil.getPrivateKeyFromPemBytes(myprivatekey)
-                decrypted = serverpriv.decrypt(packet.PreKey, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),algorithm=hashes.SHA256(), label=None))
+                decrypted = serverpriv.decrypt(packet.PreKey, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA1()),algorithm=hashes.SHA1(), label=None))
                 #print("Decrypted Pre-Master Secret: ", decrypted)
                 self.pks = int.from_bytes(decrypted, byteorder='big')
                 #====================================
@@ -337,7 +356,7 @@ class PLSClient(StackingProtocol):
         return Plaintext
 
     def mac_engine(self, ciphertext):
-        makehmac = CipherUtil.MAC_HMAC_SHA1(self.mkc)
+        makehmac = MAC_HMAC_SHA256(self.mkc)
         mac = makehmac.mac(ciphertext)
 
         # Creating PLS Data Packet and Writing down PEEP
@@ -348,7 +367,7 @@ class PLSClient(StackingProtocol):
         self.transport.write(serializeddata)
 
     def mac_verification_engine(self, ReceivedCiphertext, ReceivedMac):
-        VerificationCheck = CipherUtil.MAC_HMAC_SHA1(self.mks)
+        VerificationCheck = MAC_HMAC_SHA256(self.mks)
 
         return VerificationCheck.verifyMac(ReceivedCiphertext, ReceivedMac)
 
