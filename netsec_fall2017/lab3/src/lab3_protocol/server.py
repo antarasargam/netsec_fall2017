@@ -37,14 +37,14 @@ class CIPHER_AES128_CTR(object):
         unpadder = PKCS7(self.block_size).unpadder()
         return unpadder.update(paddedData) + unpadder.finalize()
 
-class MAC_HMAC_SHA256(object):
+class MAC_HMAC_SHA1(object):
     MAC_SIZE = 20
 
     def __init__(self, key):
         self.__key = key
 
     def mac(self, data):
-        mac = hmac.new(self.__key, digestmod="sha256")
+        mac = hmac.new(self.__key, digestmod="sha1")
         mac.update(data)
         return mac.digest()
 
@@ -343,7 +343,7 @@ class PLSServer(StackingProtocol):
         return Plaintext
 
     def mac_engine(self, ciphertext):
-        makehmac = MAC_HMAC_SHA256(self.mks)
+        makehmac = MAC_HMAC_SHA1(self.mks)
         mac = makehmac.mac(ciphertext)
 
         # Creating PLS Data Packet and Writing Down to PEEP
@@ -354,7 +354,7 @@ class PLSServer(StackingProtocol):
         self.transport.write(serializeddata)
 
     def mac_verification_engine(self, ReceivedCiphertext, ReceivedMac):
-        VerificationCheck = MAC_HMAC_SHA256(self.mkc)
+        VerificationCheck = MAC_HMAC_SHA1(self.mkc)
         return VerificationCheck.verifyMac(ReceivedCiphertext, ReceivedMac)
 
     def write(self, data):
