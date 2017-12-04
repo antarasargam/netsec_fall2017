@@ -1,22 +1,20 @@
 #Server IP Address 20174.1.666.46
 
-import hashlib
-from .CertFactory import getCertsForAddr, getPrivateKeyForAddr, getRootCert
+import logging, os, re
+import hashlib, struct
 from Lab3.packets import PlsHello, PlsData, PlsHandshakeDone, PlsKeyExchange, PlsClose
-from playground.network.common.Protocol import StackingProtocol, StackingTransport
-import os, re
+from playground.network.common.Protocol import StackingProtocol, StackingProtocolFactory, StackingTransport
+from .CertFactory import getPrivateKeyForAddr, getRootCert, getCertsForAddr
 from playground.common import CipherUtil
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding, utils
 from Lab3.packets import BasePacketType
-
-from cryptography.hazmat.primitives.padding import PKCS7
+from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.ciphers.modes import CTR
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
-from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives.ciphers import Cipher
-import hmac
+from cryptography.x509.oid import NameOID
 from cryptography.hazmat.backends import default_backend
+from cryptography.exceptions import InvalidSignature
 
 backend = default_backend()
 
@@ -25,28 +23,32 @@ class CIPHER_AES128_CTR(object):
         cipher = Cipher(AES(key), CTR(iv), backend)
         self.encrypter = cipher.encryptor()
         self.decrypter = cipher.decryptor()
-        self.block_size = 128
+        #self.block_size = 128
 
     def encrypt(self, data):
-        padder = PKCS7(self.block_size).padder()
-        paddedData = padder.update(data) + padder.finalize()
-        return self.encrypter.update(paddedData) + self.encrypter.finalize()
+        #padder = PKCS7(self.block_size).padder()
+        #paddedData = padder.update(data) + padder.finalize()
+        #return self.encrypter.update(paddedData) + self.encrypter.finalize()
+        return self.encrypter.update(data) + self.encrypter.finalize()
 
     def decrypt(self, data):
-        paddedData = self.decrypter.update(data) + self.encrypter.finalize()
-        unpadder = PKCS7(self.block_size).unpadder()
-        return unpadder.update(paddedData) + unpadder.finalize()
+        #paddedData = self.decrypter.update(data) + self.encrypter.finalize()
+        #unpadder = PKCS7(self.block_size).unpadder()
+        #return unpadder.update(paddedData) + unpadder.finalize()
+        return self.decrypter.update(data) + self.decrypter.finalize()
+
 
 class MAC_HMAC_SHA1(object):
     MAC_SIZE = 20
 
     def __init__(self, key):
         self.__key = key
+        self.backend = default_backend()
 
     def mac(self, data):
-        mac = hmac.new(self.__key, digestmod="sha1")
+        mac = hmac.HMAC(self.__key, hashes.SHA1(), self.backend)
         mac.update(data)
-        return mac.digest()
+        return mac
 
     def verifyMac(self, data, checkMac):
         mac = self.mac(data)
@@ -211,12 +213,12 @@ class PLSServer(StackingProtocol):
                 serverpriv = CipherUtil.getPrivateKeyFromPemBytes(myprivatekey)
                 decrypted = serverpriv.decrypt(packet.PreKey, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA1()),algorithm=hashes.SHA1(), label=None))
                 #print("Decrypted Pre-Master Secret: ", decrypted)
-                self.pkc = int.from_bytes(decrypted, byteorder='big')
+                self.pkc = decrypted #int.from_bytes(decrypted, byteorder='big')
                 #====================================
                 #Creating Server Pre-Master
                 serverkey = PlsKeyExchange()
                 randomvalue = os.urandom(16) #b'1234567887654321'
-                self.pks = int.from_bytes(randomvalue, byteorder='big')
+                self.pks = randomvalue #int.from_bytes(randomvalue, byteorder='big')
                 serverkey.NoncePlusOne = self.clientnonce + 1
                 pub_key = self.incoming_cert[0].public_key()
                 encrypted = pub_key.encrypt(randomvalue, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA1()),algorithm=hashes.SHA1(), label=None))
@@ -257,7 +259,8 @@ class PLSServer(StackingProtocol):
                     self.ctr += 1
 
                     if self.ctr != 5:
-                        print("Verification Failed. Try Again. Failed {}").format(self.ctr)
+                        print("Verification Failed. Try Again. Failed {}".format(self.ctr))
+                        #Incorrect handling here. The control must be go to the other side send the packet again for verification
 
                     else:
                         print("Verification failed 5 times. Killing Connection and Sending PlsClose.")
@@ -277,29 +280,29 @@ class PLSServer(StackingProtocol):
 
     def key_generator(self):
         #print("\n\nIn key_generator")
-        self.block0 = hashlib.sha1()
+        self.block0 = hashes.Hash(hashes.SHA1(), backend=default_backend())
         self.block0.update(b"PLS1.0")
-        self.block0.update(str(self.nc).encode())
-        self.block0.update(str(self.ns).encode())
-        self.block0.update(str(self.pkc).encode())
-        self.block0.update(str(self.pks).encode())
-        self.block0_digest = self.block0.digest()
+        self.block0.update(self.nc.to_bytes(8,byteorder="big"))
+        self.block0.update(self.ns.to_bytes(8,byteorder="big"))
+        self.block0.update(self.pkc)
+        self.block0.update(self.pks)
+        self.block0_digest = self.block0.finalize()
         #print("Block 0 digest is: ", self.block0_digest)
-        block1 = hashlib.sha1()
+        block1 = hashes.Hash(hashes.SHA1(), backend=default_backend())
         block1.update(self.block0_digest)
-        block1digest = block1.digest()
+        block1digest = block1.finalize()
         #print("Block 1 digest is: ", block1digest)
-        block2 = hashlib.sha1()
+        block2 = hashes.Hash(hashes.SHA1(), backend=default_backend())
         block2.update(block1digest)
-        block2digest =  block2.digest()
+        block2digest =  block2.finalize()
         #print("Block 2 digest is: ", block2digest)
-        block3 = hashlib.sha1()
+        block3 = hashes.Hash(hashes.SHA1(), backend=default_backend())
         block3.update(block2digest)
-        block3digest =  block3.digest()
+        block3digest =  block3.finalize()
         #print("Block 3 digest is: ", block3digest)
-        block4 = hashlib.sha1()
+        block4 = hashes.Hash(hashes.SHA1(), backend=default_backend())
         block4.update(block3digest)
-        block4digest =  block4.digest()
+        block4digest =  block4.finalize()
         #print("Block 4 digest is: ", block4digest)
         #print("Block 0 digest decoded is: ", self.block0_digest.hex())
         #print("Block 1 digest decoded is: ", block1digest.hex())
@@ -307,6 +310,21 @@ class PLSServer(StackingProtocol):
         #print("Block 1 digest decoded is: ", block3digest.hex())
         #print("Block 1 digest decoded is: ", block4digest.hex())
 
+        concatenated = (self.block0_digest + block1digest + block2digest + block3digest + block4digest)
+        print("-----------------------------------------------------------",concatenated)
+        # print("Concatenated string is: ", concatenated)
+        # print("Concatenated string size is: ", self.utf8len(concatenated),"bytes")
+        #binary_string = bin(int(concatenated, 16))[2:]
+        # print("Value of concatenated string in bits is: ", binary_string)
+
+        self.ekc = concatenated[:16]
+        self.eks = concatenated[16:32]
+        self.ivc = concatenated[32:48]
+        self.ivs = concatenated[48:64]
+        self.mkc = concatenated[64:80]
+        self.mks = concatenated[80:96]
+
+        '''
         concatenated = (self.block0_digest + block1digest + block2digest + block3digest + block4digest).hex()
         #print("Concatenated string is: ", concatenated)
         #print("Concatenated string size is: ", self.utf8len(concatenated),"bytes")
@@ -319,18 +337,14 @@ class PLSServer(StackingProtocol):
         self.ivs = binary_string[384:512]
         self.mkc = binary_string[512:640]
         self.mks = binary_string[640:768]
-        #print("Value of Ekc is: ", self.ekc)
-        #print("Value of Eks is: ", self.eks)
-        #print("Value of ivc is: ", self.ivc)
-        #print("Value of ivs is: ", self.ivs)
-        #print("Value of mkc is: ", self.mkc)
-        #print("Value of mks is: ", self.mks)
+
         self.ekc = bytes(int(self.ekc[i: i + 8], 2) for i in range(0, len(self.ekc), 8))
         self.eks = bytes(int(self.eks[i: i + 8], 2) for i in range(0, len(self.eks), 8))
         self.ivc = bytes(int(self.ivc[i: i + 8], 2) for i in range(0, len(self.ivc), 8))
         self.ivs = bytes(int(self.ivs[i: i + 8], 2) for i in range(0, len(self.ivs), 8))
         self.mkc = bytes(int(self.mkc[i: i + 8], 2) for i in range(0, len(self.mkc), 8))
         self.mks = bytes(int(self.mks[i: i + 8], 2) for i in range(0, len(self.mks), 8))
+        '''
 
     def encryption_engine(self, plaintext):
         MakeCipher = CIPHER_AES128_CTR(self.eks, self.ivs)
@@ -343,19 +357,27 @@ class PLSServer(StackingProtocol):
         return Plaintext
 
     def mac_engine(self, ciphertext):
-        makehmac = MAC_HMAC_SHA1(self.mks)
-        mac = makehmac.mac(ciphertext)
+        mac= hmac.HMAC(self.mks, hashes.SHA1(), backend=default_backend())
+        mac.update(ciphertext)
 
-        # Creating PLS Data Packet and Writing Down to PEEP
+        # Creating PLS Data Packet and Writing down PEEP
         serverdata = PlsData()
         serverdata.Ciphertext = ciphertext
-        serverdata.Mac = mac
+        serverdata.Mac = mac.finalize()
         serializeddata = serverdata.__serialize__()
         self.transport.write(serializeddata)
 
     def mac_verification_engine(self, ReceivedCiphertext, ReceivedMac):
-        VerificationCheck = MAC_HMAC_SHA1(self.mkc)
-        return VerificationCheck.verifyMac(ReceivedCiphertext, ReceivedMac)
+        mac = hmac.HMAC(self.mkc, hashes.SHA1(), backend=default_backend())
+        mac.update(ReceivedCiphertext)
+        try :
+            mac.verify(ReceivedMac)
+            print("Mac Verification Succeeded")
+            return True
+
+        except InvalidSignature :
+            print("Mac Verification Failed. Invalid Signature")
+            raise
 
     def write(self, data):
         self.encryption_engine(data)
@@ -391,3 +413,4 @@ class PLSServer(StackingProtocol):
     # Close the server
     server.close()
     loop.close()'''
+
