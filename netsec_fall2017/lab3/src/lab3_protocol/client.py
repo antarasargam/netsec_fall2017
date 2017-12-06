@@ -1,20 +1,21 @@
-#Client IP Address 20174.1.666.46
+#Client
 
 import logging, os, re
 import hashlib, struct
-from Lab3.packets import PlsHello, PlsData, PlsHandshakeDone, PlsKeyExchange, PlsClose
+from .packets import PlsHello, PlsData, PlsHandshakeDone, PlsKeyExchange, PlsClose
 from playground.network.common.Protocol import StackingProtocol, StackingProtocolFactory, StackingTransport
-from .CertFactory import getPrivateKeyForAddr, getRootCert, getCertsForAddr
+from .CertFactory import getCertsForAddr, getRootCert, getPrivateKeyForAddr
 from playground.common import CipherUtil
 from cryptography.hazmat.primitives.asymmetric import padding, utils
-from Lab3.packets import BasePacketType
 from cryptography.hazmat.primitives import hashes, hmac
+from .packets import BasePacketType
+from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives.ciphers.modes import CTR
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.ciphers import Cipher
-from cryptography.x509.oid import NameOID
-from cryptography.hazmat.backends import default_backend
 from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.backends import default_backend
+
 backend = default_backend()
 
 
@@ -26,38 +27,19 @@ class CIPHER_AES128_CTR(object):
         #self.block_size = 128
 
     def encrypt(self, data):
+        #print ("Called the encrypt method in AES")
         #padder = PKCS7(self.block_size).padder()
         #paddedData = padder.update(data) + padder.finalize()
-        #return self.encrypter.update(paddedData) + self.encrypter.finalize()
-        return self.encrypter.update(data) + self.encrypter.finalize()
+        return self.encrypter.update(data) #+ self.encrypter.finalize()
 
     def decrypt(self, data):
         #paddedData = self.decrypter.update(data) + self.encrypter.finalize()
         #unpadder = PKCS7(self.block_size).unpadder()
-        #return unpadder.update(paddedData) + unpadder.finalize()
-        return self.decrypter.update(data) + self.decrypter.finalize()
+        return self.decrypter.update(data) #+ self.decrypter.finalize()
 
-'''
-class MAC_HMAC_SHA1(object):
-    MAC_SIZE = 20
-
-    def __init__(self, key):
-        self.__key = key
-        self.backend = default_backend()
-
-    def mac(self, data):
-        mac = hmac.HMAC(self.__key, hashes.SHA1(), self.backend)
-        mac.update(data)
-        return mac
-
-    def verifyMac(self, data, checkMac):
-        mac = self.mac(data)
-        return mac == checkMac
-'''
 
 class PLSStackingTransport(StackingTransport):
-
-    def __init__(self,protocol,transport):
+    def __init__(self, protocol, transport):
         self.protocol = protocol
         self.transport = transport
         self.exc = None
@@ -74,13 +56,12 @@ class PLSStackingTransport(StackingTransport):
 
 
 class PLSClient(StackingProtocol):
-
     incoming_cert = []
 
     def __init__(self):
         self.deserializer = BasePacketType.Deserializer()
         self.transport = None
-        #self.loop = loop
+        # self.loop = loop
 
     def utf8len(self, s):
         return len(s.encode('utf-8'))
@@ -93,11 +74,11 @@ class PLSClient(StackingProtocol):
         splitlist = re.split('(.*)\.(.*)\.(.*)\.(.*)', self.address)[1:4]
         self.splitaddr = '.'.join(splitlist)
         clienthello = PlsHello()
-        clienthello.Nonce = int.from_bytes(os.urandom(8), byteorder='big') #12345678
-        #print("Client Nonce", clienthello.Nonce)
+        clienthello.Nonce = int.from_bytes(os.urandom(8), byteorder='big')  # 12345678
+        # print("Client Nonce", clienthello.Nonce)
         self.nc = clienthello.Nonce
-
-        idcert = getCertsForAddr(self.address)  #This hardcoded IP address must the peerAddress
+        #print ("Client Nonce value is:", clienthello.Nonce)
+        idcert = getCertsForAddr(self.address)  # This hardcoded IP address must the peerAddress
         intermediatecert = getCertsForAddr(self.splitaddr)
         root = getRootCert()
         clienthello.Certs = []
@@ -124,11 +105,10 @@ class PLSClient(StackingProtocol):
 
         encodedrootcert = getRootCert()
         rootcert = CipherUtil.getCertFromBytes(encodedrootcert)
-        print("Type of RootCert: ", type(rootcert))
+        #print("Type of RootCert: ", type(rootcert))
         rootsubject = CipherUtil.getCertSubject(rootcert)
 
-        print(" My address is:- ", self.address)
-        print(" Server PeerAddress is:- ", self.peerAddress)
+        #print(" Server PeerAddress is:- ", self.peerAddress)
 
         receivedIDCommonName = self.GetCommonName(certificate[0])
         intermediateCommonName = self.GetCommonName(certificate[1])
@@ -139,7 +119,7 @@ class PLSClient(StackingProtocol):
             FirstThreeOctets = '.'.join(splitlist)
 
             if serverissuer == intermediatesubject and FirstThreeOctets == intermediateCommonName:
-                print("Chain 1 verification succeeded! Going to Check Signature now")
+               # print("Chain 1 verification succeeded! Going to Check Signature now")
                 # checking signature first stage
 
                 signature = certificate[0].signature
@@ -152,13 +132,13 @@ class PLSClient(StackingProtocol):
                         padding.PKCS1v15(),
                         hashes.SHA256())
 
-                    print("Signature check stage 1 successful!")
+                    #print("Signature check stage 1 successful!")
 
                     splitlist = re.split('(.*)\.(.*)\.(.*)', FirstThreeOctets)[1:3]
                     FirstTwoOctets = '.'.join(splitlist)
 
                     if intermediateissuer == rootsubject and FirstTwoOctets == rootCommonName:
-                        print("Chain 2 verification succeeded! Going to check signature now")
+                        #print("Chain 2 verification succeeded! Going to check signature now")
                         # checking signature second stage
 
                         signature = certificate[1].signature
@@ -172,9 +152,9 @@ class PLSClient(StackingProtocol):
                                 padding.PKCS1v15(),
                                 hashes.SHA256())
 
-                            print("Signature check stage 2 successful!")
+                            #print("Signature check stage 2 successful!")
 
-                            print("FULLY VALIDATED! AWESOME!")
+                            #print("FULLY VALIDATED! AWESOME!")
 
                             return True
 
@@ -199,10 +179,10 @@ class PLSClient(StackingProtocol):
         '''
         public_key.verify() function link
         https://cryptography.io/en/latest/hazmat/primitives/asymmetric/rsa/
-        
+
         padding link
         https://cryptography.io/en/latest/hazmat/primitives/asymmetric/rsa/#cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicNumbers.public_key
-        
+
         all functions of the Certificate x509 object has (example issuer, subject, signature, tbs_certificate_bytes)
         https://cryptography.io/en/latest/x509/reference/#x-509-certificate-object
         '''
@@ -218,14 +198,17 @@ class PLSClient(StackingProtocol):
                 if self.validate(self.incoming_cert):
                     self.m.update(packet.__serialize__())
                     print(" Server Certificate Validated. Sending Client Key Exchange!\n")
+                    #print ("Server Nonce value is:", packet.Nonce)
                     clientkey = PlsKeyExchange()
-                    randomvalue = os.urandom(16) # Example bytes:- b'1234567887654321'
+                    randomvalue = os.urandom(16)  # Example bytes:- b'1234567887654321'
                     self.pkc = randomvalue #int.from_bytes(randomvalue, byteorder='big')
                     clientkey.NoncePlusOne = packet.Nonce + 1
                     self.ns = packet.Nonce
+                    #print ("Sending Server Nonce value: ", clientkey.NoncePlusOne)
                     pub_key = self.incoming_cert[0].public_key()
-                    encrypted1 = pub_key.encrypt(randomvalue, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA1()),algorithm=hashes.SHA1(),label=None))
-                    #print ("Encrypted String is: ",encrypted1)
+                    encrypted1 = pub_key.encrypt(randomvalue, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA1()),
+                                                                           algorithm=hashes.SHA1(), label=None))
+                    print ("Encrypted String is: ",encrypted1)
                     clientkey.PreKey = encrypted1
                     clkey = clientkey.__serialize__()
                     print("Sent the Prekey to Server.")
@@ -233,34 +216,35 @@ class PLSClient(StackingProtocol):
                     self.transport.write(clkey)
 
             if isinstance(packet, PlsKeyExchange):
-                print("Received Server Key Exchange.")
+                #print("Received Server Key Exchange.")
                 self.m.update(packet.__serialize__())
-                myprivatekey = getPrivateKeyForAddr(self.address) #This hardcoded IP address must the peerAddress
+                myprivatekey = getPrivateKeyForAddr(self.address)  # This hardcoded IP address must the peerAddress
                 serverpriv = CipherUtil.getPrivateKeyFromPemBytes(myprivatekey)
-                decrypted = serverpriv.decrypt(packet.PreKey, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA1()),algorithm=hashes.SHA1(), label=None))
-                #print("Decrypted Pre-Master Secret: ", decrypted)
+                decrypted = serverpriv.decrypt(packet.PreKey, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA1()),
+                                                                           algorithm=hashes.SHA1(), label=None))
+                print("Decrypted Pre-Master Secret: ", decrypted)
                 self.pks = decrypted #int.from_bytes(decrypted, byteorder='big')
-                #====================================
-                #sending digest
+                # ====================================
+                # sending digest
                 self.clientdigest = self.m.digest()
-                #print("Hash digest is: ", self.clientdigest)
+                # print("Hash digest is: ", self.clientdigest)
                 hdone = PlsHandshakeDone()
                 hdone.ValidationHash = self.clientdigest
                 hdone_s = hdone.__serialize__()
-                print("Sent the PLS Handshake Done to server.")
+                #print("Sent the PLS Handshake Done to server.")
                 self.transport.write(hdone_s)
 
             if isinstance(packet, PlsHandshakeDone):
-                print("\n\nReceived Server Handshake done message.")
+                #print("\n\nReceived Server Handshake done message.")
                 if (self.clientdigest == packet.ValidationHash):
-                    print("Digest verification done!")
+                    #print("Digest verification done!")
                     self.key_generator()
                     plstransport = PLSStackingTransport(self, self.transport)
                     higherTransport = StackingTransport(plstransport)
                     self.higherProtocol().connection_made(higherTransport)
 
             if isinstance(packet, PlsData):
-                print("#######################Recieved Data Packet from PLSServer ############################")
+                #print("#######################Recieved Data Packet from PLSServer ############################")
                 self.ctr = 0
                 if self.mac_verification_engine(packet.Ciphertext, packet.Mac):
                     DecryptedPacket = self.decryption_engine(packet.Ciphertext)
@@ -290,9 +274,8 @@ class PLSClient(StackingProtocol):
                 print(packet.Error)
                 self.transport.close()
 
-
     def key_generator(self):
-        #print("\n\nIn key_generator")
+                #print("\n\nIn key_generator")
         self.block0 = hashes.Hash(hashes.SHA1(), backend=default_backend())
         self.block0.update(b"PLS1.0")
         self.block0.update(self.nc.to_bytes(8,byteorder="big"))
@@ -316,14 +299,15 @@ class PLSClient(StackingProtocol):
         block4 = hashes.Hash(hashes.SHA1(), backend=default_backend())
         block4.update(block3digest)
         block4digest =  block4.finalize()
-        #print("Block 4 digest is: ", block4digest)
-        #print("Block 0 digest decoded is: ", self.block0_digest.hex())
-        #print("Block 1 digest decoded is: ", block1digest.hex())
-        #print("Block 2 digest decoded is: ", block2digest.hex())
-        #print("Block 1 digest decoded is: ", block3digest.hex())
-        #print("Block 1 digest decoded is: ", block4digest.hex())
+        # print("Block 4 digest is: ", block4digest)
+        # print("Block 0 digest decoded is: ", self.block0_digest.hex())
+        # print("Block 1 digest decoded is: ", block1digest.hex())
+        # print("Block 2 digest decoded is: ", block2digest.hex())
+        # print("Block 1 digest decoded is: ", block3digest.hex())
+        # print("Block 1 digest decoded is: ", block4digest.hex())
+
         concatenated = (self.block0_digest + block1digest + block2digest + block3digest + block4digest)
-        print("-----------------------------------------------------------",type(concatenated))
+        #print("-----------------------------------------------------------Concatenated:---",concatenated)
         # print("Concatenated string is: ", concatenated)
         # print("Concatenated string size is: ", self.utf8len(concatenated),"bytes")
         #binary_string = bin(int(concatenated, 16))[2:]
@@ -335,37 +319,32 @@ class PLSClient(StackingProtocol):
         self.ivs = concatenated[48:64]
         self.mkc = concatenated[64:80]
         self.mks = concatenated[80:96]
-
-        '''
-        concatenated = (self.block0_digest + block1digest + block2digest + block3digest + block4digest).hex()
-        #print("Concatenated string is: ", concatenated)
-        #print("Concatenated string size is: ", self.utf8len(concatenated),"bytes")
-        binary_string = bin(int(concatenated, 16))[2:]
-        #print("Value of concatenated string in bits is: ", binary_string)
-
-        self.ekc = binary_string[:128]
-        self.eks = binary_string[128:256]
-        self.ivc = binary_string[256:384]
-        self.ivs = binary_string[384:512]
-        self.mkc = binary_string[512:640]
-        self.mks = binary_string[640:768]
-
-        self.ekc = bytes(int(self.ekc[i: i + 8], 2) for i in range(0, len(self.ekc), 8))
-        self.eks = bytes(int(self.eks[i: i + 8], 2) for i in range(0, len(self.eks), 8))
-        self.ivc = bytes(int(self.ivc[i: i + 8], 2) for i in range(0, len(self.ivc), 8))
-        self.ivs = bytes(int(self.ivs[i: i + 8], 2) for i in range(0, len(self.ivs), 8))
-        self.mkc = bytes(int(self.mkc[i: i + 8], 2) for i in range(0, len(self.mkc), 8))
-        self.mks = bytes(int(self.mks[i: i + 8], 2) for i in range(0, len(self.mks), 8))
-        '''
+        self.encryption = CIPHER_AES128_CTR(self.ekc, self.ivc)
+        self.decryption = CIPHER_AES128_CTR(self.eks, self.ivs)
+        #print("Value of Ekc is: ", self.ekc)
+        #print("Value of Eks is: ", self.eks)
+        #print("Value of ivc is: ", self.ivc)
+        #print("Value of ivs is: ", self.ivs)
+        #print("Value of mkc is: ", self.mkc)
+        #print("Value of mks is: ", self.mks)
+        #self.ekc = bytes(int(self.ekc[i: i + 8], 2) for i in range(0, len(self.ekc), 8))
+        #self.eks = bytes(int(self.eks[i: i + 8], 2) for i in range(0, len(self.eks), 8))
+        #self.ivc = bytes(int(self.ivc[i: i + 8], 2) for i in range(0, len(self.ivc), 8))
+        #self.ivs = bytes(int(self.ivs[i: i + 8], 2) for i in range(0, len(self.ivs), 8))
+        #self.mkc = bytes(int(self.mkc[i: i + 8], 2) for i in range(0, len(self.mkc), 8))
+        #self.mks = bytes(int(self.mks[i: i + 8], 2) for i in range(0, len(self.mks), 8))
 
     def encryption_engine(self, plaintext):
-        MakeCipher = CIPHER_AES128_CTR(self.ekc, self.ivc)
-        Ciphertext = MakeCipher.encrypt(plaintext)
+        print ("Calling encryption Engine")
+        #MakeCipher = CIPHER_AES128_CTR(self.ekc, self.ivc)
+        Ciphertext = self.encryption.encrypt(plaintext)
+        print ("Cipher TExt before MAC : ", Ciphertext)
         self.mac_engine(Ciphertext)
 
     def decryption_engine(self, ReceivedCiphertext):
-        MakePlaintext = CIPHER_AES128_CTR(self.eks, self.ivs)
-        Plaintext = MakePlaintext.decrypt(ReceivedCiphertext)
+        #print("ReceivedCiphertext", ReceivedCiphertext)
+        #MakePlaintext = CIPHER_AES128_CTR(self.eks, self.ivs)
+        Plaintext = self.decryption.decrypt(ReceivedCiphertext)
         return Plaintext
 
     def mac_engine(self, ciphertext):
@@ -376,6 +355,8 @@ class PLSClient(StackingProtocol):
         clientdata = PlsData()
         clientdata.Ciphertext = ciphertext
         clientdata.Mac = mac.finalize()
+        print("+++++++++++++++++++++++++++Sending Encrypted Data+++++++++++++++++++++++++++", clientdata)
+        #print("++++++++++++++++++++++++++++++++++++Client mac: ", clientdata.Mac)
         serializeddata = clientdata.__serialize__()
         self.transport.write(serializeddata)
 
@@ -384,7 +365,7 @@ class PLSClient(StackingProtocol):
         mac.update(ReceivedCiphertext)
         try :
             mac.verify(ReceivedMac)
-            print("Mac Verification Succeeded")
+            #print("Mac Verification Succeeded")
             return True
 
         except InvalidSignature :
@@ -392,24 +373,25 @@ class PLSClient(StackingProtocol):
             raise
 
     def write(self, data):
+        print ("Calling WRITE PLS")
         self.encryption_engine(data)
 
     def close(self):
-        print("######################A Close has been called from higher layer. Sending PlsClose now#########################")
+        #print("######################A Close has been called from higher layer. Sending PlsClose now#########################")
 
         Close = PlsClose()
         serializeClose = Close.__serialize__()
         self.transport.write(serializeClose)
 
-    def connection_lost(self,exc):
+    def connection_lost(self, exc):
         self.transport.close()
         self.transport = None
+
 
 logging.getLogger().setLevel(logging.NOTSET)
 logging.getLogger().addHandler(logging.StreamHandler())
 
-
-#Clientfactorypls = StackingProtocolFactory(lambda: PLSClient())
+# Clientfactorypls = StackingProtocolFactory(lambda: PLSClient())
 
 '''if __name__ == "__main__":
 
@@ -425,4 +407,3 @@ logging.getLogger().addHandler(logging.StreamHandler())
         pass
 
     loop.close()'''
-
