@@ -29,13 +29,13 @@ class CIPHER_AES128_CTR(object):
         #padder = PKCS7(self.block_size).padder()
         #paddedData = padder.update(data) + padder.finalize()
         #return self.encrypter.update(paddedData) + self.encrypter.finalize()
-        return self.encrypter.update(data) + self.encrypter.finalize()
+        return self.encrypter.update(data) #+ self.encrypter.finalize()
 
     def decrypt(self, data):
         #paddedData = self.decrypter.update(data) + self.encrypter.finalize()
         #unpadder = PKCS7(self.block_size).unpadder()
         #return unpadder.update(paddedData) + unpadder.finalize()
-        return self.decrypter.update(data) + self.decrypter.finalize()
+        return self.decrypter.update(data) #+ self.decrypter.finalize()
 
 
 class MAC_HMAC_SHA1(object):
@@ -323,6 +323,8 @@ class PLSServer(StackingProtocol):
         self.ivs = concatenated[48:64]
         self.mkc = concatenated[64:80]
         self.mks = concatenated[80:96]
+        self.encryption = CIPHER_AES128_CTR(self.eks, self.ivs)
+        self.decryption = CIPHER_AES128_CTR(self.ekc, self.ivc)
 
         '''
         concatenated = (self.block0_digest + block1digest + block2digest + block3digest + block4digest).hex()
@@ -347,13 +349,13 @@ class PLSServer(StackingProtocol):
         '''
 
     def encryption_engine(self, plaintext):
-        MakeCipher = CIPHER_AES128_CTR(self.eks, self.ivs)
-        Ciphertext = MakeCipher.encrypt(plaintext)
+        #MakeCipher = CIPHER_AES128_CTR(self.eks, self.ivs)
+        Ciphertext = self.encryption.encrypt(plaintext)
         self.mac_engine(Ciphertext)
 
     def decryption_engine(self, ReceivedCiphertext):
-        MakePlaintext = CIPHER_AES128_CTR(self.ekc, self.ivc)
-        Plaintext = MakePlaintext.decrypt(ReceivedCiphertext)
+        #MakePlaintext = CIPHER_AES128_CTR(self.ekc, self.ivc)
+        Plaintext = self.decryption.decrypt(ReceivedCiphertext)
         return Plaintext
 
     def mac_engine(self, ciphertext):
